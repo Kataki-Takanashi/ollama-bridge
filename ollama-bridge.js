@@ -1,0 +1,200 @@
+import express from 'express';
+import cors from 'cors';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import crypto from 'crypto';
+import net from 'net';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import qrcode from 'qrcode-terminal';
+import chalk from 'chalk';
+import ngrok from 'ngrok';
+import Conf from 'conf';
+
+// Add config store
+const config = new Conf({
+  projectName: 'ollama-bridge'
+});
+
+// Check if token exists
+const hasStoredToken = !!config.get('ngrokToken');
+
+// Update command line arguments
+const argv = yargs(hideBin(process.argv))
+  .option('ollama-url', {
+    description: 'Ollama server URL',
+    default: 'http://localhost:11434'
+  })
+  .option('port', {
+    description: 'Specific port to use (will find available port if occupied)',
+    type: 'number'
+  })
+  .option('ngrok-token', {
+    description: 'Set Ngrok authtoken (only needed for first run)',
+    type: 'string'
+  })
+  .option('qr', {
+    description: 'Show QR code for connection details',
+    type: 'boolean',
+    default: false
+  })
+  .epilogue(hasStoredToken ? '' : `
+${chalk.yellow('\nFirst Time Setup:')}
+${chalk.cyan('1. Sign up for a free ngrok account at https://ngrok.com')}
+${chalk.cyan('2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken')}
+${chalk.cyan('3. Run with your token: --ngrok-token="your_token_here"')}`)
+  .strict()
+  .fail((msg, err, yargs) => {
+    if (err) throw err;
+    console.error(chalk.red('Error:', msg));
+    console.error(chalk.yellow('\nFor available options, run: --help'));
+    process.exit(1);
+  })
+  .help()
+  .argv;
+
+// Find an available port
+async function findAvailablePort(startPort = argv.port || 3535) {
+  const isPortAvailable = (port) => {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => {
+        server.close();
+        resolve(true);
+      });
+      server.listen(port);
+    });
+  };
+
+  let port = startPort;
+  while (!(await isPortAvailable(port))) {
+    port++;
+  }
+  return port;
+}
+
+// Generate secure connection details
+async function generateConnectionDetails(port) {
+  const token = crypto.randomBytes(32).toString('hex');
+  let storedNgrokToken = config.get('ngrokToken');
+  
+  if (argv.ngrokToken) {
+    storedNgrokToken = argv.ngrokToken;
+    config.set('ngrokToken', argv.ngrokToken);
+  }
+  
+  if (!storedNgrokToken) {
+    console.error(chalk.red('Ngrok token not found. Please provide it using --ngrok-token'));
+    console.log(chalk.yellow('\nTo get started:'));
+    console.log(chalk.cyan('1. Sign up for a free ngrok account at https://ngrok.com'));
+    console.log(chalk.cyan('2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken'));
+    console.log(chalk.cyan('3. Run the script with your token:'));
+    console.log(chalk.gray('   ./ollama-bridge --ngrok-token="your_token_here"'));
+    console.log(chalk.yellow('\nFor all available options, run:'));
+    console.log(chalk.gray('   ./ollama-bridge --help\n'));
+    process.exit(1);
+  }
+
+  try {
+    await ngrok.authtoken(storedNgrokToken);
+    const url = await ngrok.connect({
+      addr: port,
+      bind_tls: true
+    });
+    return { token, connectionUrl: url };
+  } catch (error) {
+    console.error(chalk.red('Failed to start ngrok:'), error.message);
+    process.exit(1);
+  }
+}
+
+// Test Ollama connection
+async function testOllamaConnection(url) {
+  try {
+    const response = await fetch(`${url}/api/tags`);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return true;
+  } catch (error) {
+    console.error(chalk.red('Failed to connect to Ollama:'), error.message);
+    return false;
+  }
+}
+
+async function startServer() {
+  // Test Ollama connection first
+  const ollamaConnected = await testOllamaConnection(argv.ollamaUrl);
+  if (!ollamaConnected) {
+    console.error(chalk.red('Please ensure Ollama is running and try again.'));
+    process.exit(1);
+  }
+
+  const port = await findAvailablePort();
+  const { token, connectionUrl } = await generateConnectionDetails(port);
+
+  const app = express();
+
+  // Security middleware
+  app.use((req, res, next) => {
+    const authToken = req.headers['x-auth-token'];
+    if (!authToken || authToken !== token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  });
+
+  app.use(cors());
+
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  // Proxy middleware
+  app.use('/api', createProxyMiddleware({
+    target: argv.ollamaUrl,
+    changeOrigin: true,
+    pathRewrite: {'^/api': ''},
+    onError: (err, req, res) => {
+      console.error(chalk.red('Proxy Error:'), err);
+      res.status(502).json({ error: 'Proxy Error', message: err.message });
+    }
+  }));
+
+  // Error handling
+  app.use((err, req, res, next) => {
+    console.error(chalk.red('Server Error:'), err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  });
+
+  // Start server
+  try {
+    app.listen(port, 'localhost', () => {
+      console.log(chalk.green('\n🚀 Ollama Bridge Server is running!\n'));
+      console.log(chalk.yellow('Connection Details:'));
+      console.log(chalk.cyan(`URL: ${connectionUrl}`));
+      console.log(chalk.cyan(`Token: ${token}\n`));
+    
+      if (argv.qr) {
+        // Generate QR code for easy mobile connection
+        qrcode.generate(JSON.stringify({ url: connectionUrl, token }), { small: true });
+      }
+    
+      console.log(chalk.gray('\nPress Ctrl+C to stop the server'));
+    });
+  } catch (error) {
+    console.error(chalk.red('Failed to start server:'), error);
+    process.exit(1);
+  }
+
+  // Shutdown server
+  process.on('SIGINT', async () => {
+    console.log(chalk.yellow('\nShutting down server...'));
+    await ngrok.kill(); // Stop ngrok tunnel
+    process.exit(0);
+  });
+}
+
+startServer().catch(error => {
+  console.error(chalk.red('Fatal Error:'), error);
+  process.exit(1);
+});
