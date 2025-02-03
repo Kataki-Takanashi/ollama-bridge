@@ -38,7 +38,7 @@ Step 3: Run Ollama Bridge.
 
 ### Pre-built Binaries
 
-Download the appropriate binary for your operating system from [the releases section](https://github.com/Kataki-Takanashi/ollama-bridge/releases/tag/v1.0.0):
+Download the appropriate binary for your operating system from [the releases section](https://github.com/Kataki-Takanashi/ollama-bridge/releases/latest):
 
 ## Running Ollama Bridge
 
