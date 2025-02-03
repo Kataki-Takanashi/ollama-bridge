@@ -1,14 +1,17 @@
-import express from 'express';
-import cors from 'cors';
-import { createProxyMiddleware } from 'http-proxy-middleware';
-import crypto from 'crypto';
-import net from 'net';
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
-import qrcode from 'qrcode-terminal';
-import chalk from 'chalk';
-import ngrok from 'ngrok';
-import Conf from 'conf';
+#!/usr/bin/env node
+const express = require('express');
+const cors = require('cors');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const crypto = require('crypto');
+const net = require('net');
+const yargs = require('yargs');
+const { hideBin } = require('yargs/helpers');
+const qrcode = require('qrcode-terminal');
+const chalk = require('chalk');
+const fetch = require('node-fetch');
+if (chalk && chalk.Level) chalk.level = 3;
+const ngrok = require('@ngrok/ngrok');
+const Conf = require('conf').default;
 
 // Add config store
 const config = new Conf({
@@ -74,6 +77,7 @@ async function findAvailablePort(startPort = argv.port || 3535) {
 }
 
 // Generate secure connection details
+// In the generateConnectionDetails function, update the ngrok connection:
 async function generateConnectionDetails(port) {
   const token = crypto.randomBytes(32).toString('hex');
   let storedNgrokToken = config.get('ngrokToken');
@@ -96,22 +100,33 @@ async function generateConnectionDetails(port) {
   }
 
   try {
-    await ngrok.authtoken(storedNgrokToken);
-    const url = await ngrok.connect({
+
+    
+    // Initialize ngrok with token 
+    const listener = await ngrok.forward({
       addr: port,
-      bind_tls: true
+      authtoken: storedNgrokToken,
+      domain_preference: undefined // This will use the free domain
     });
-    return { token, connectionUrl: url };
+
+    return { token, connectionUrl: listener.url() };
   } catch (error) {
     console.error(chalk.red('Failed to start ngrok:'), error.message);
     process.exit(1);
   }
 }
 
+process.on('SIGINT', async () => {
+  console.log(chalk.yellow('\nShutting down server...'));
+  process.exit(0);
+});
+
 // Test Ollama connection
 async function testOllamaConnection(url) {
   try {
-    const response = await fetch(`${url}/api/tags`);
+    // Force IPv4 by replacing localhost with 127.0.0.1
+    const testUrl = url.replace('localhost', '127.0.0.1');
+    const response = await fetch(`${testUrl}/api/tags`);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return true;
   } catch (error) {
@@ -151,7 +166,7 @@ async function startServer() {
 
   // Proxy middleware
   app.use('/api', createProxyMiddleware({
-    target: argv.ollamaUrl,
+    target: argv.ollamaUrl.replace('localhost', '127.0.0.1'),
     changeOrigin: true,
     pathRewrite: {'^/api': ''},
     onError: (err, req, res) => {
@@ -160,37 +175,19 @@ async function startServer() {
     }
   }));
 
-  // Error handling
-  app.use((err, req, res, next) => {
-    console.error(chalk.red('Server Error:'), err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  });
-
-  // Start server
-  try {
-    app.listen(port, 'localhost', () => {
-      console.log(chalk.green('\n🚀 Ollama Bridge Server is running!\n'));
-      console.log(chalk.yellow('Connection Details:'));
-      console.log(chalk.cyan(`URL: ${connectionUrl}`));
-      console.log(chalk.cyan(`Token: ${token}\n`));
-    
-      if (argv.qr) {
-        // Generate QR code for easy mobile connection
-        qrcode.generate(JSON.stringify({ url: connectionUrl, token }), { small: true });
-      }
-    
-      console.log(chalk.gray('\nPress Ctrl+C to stop the server'));
-    });
-  } catch (error) {
-    console.error(chalk.red('Failed to start server:'), error);
-    process.exit(1);
-  }
-
-  // Shutdown server
-  process.on('SIGINT', async () => {
-    console.log(chalk.yellow('\nShutting down server...'));
-    await ngrok.kill(); // Stop ngrok tunnel
-    process.exit(0);
+  // Also update the server listen
+  app.listen(port, '127.0.0.1', () => {
+    console.log(chalk.green('\n🚀 Ollama Bridge Server is running!\n'));
+    console.log(chalk.yellow('Connection Details:'));
+    console.log(chalk.cyan(`URL: ${connectionUrl}`));
+    console.log(chalk.cyan(`Token: ${token}\n`));
+  
+    if (argv.qr) {
+      // Generate QR code for easy mobile connection
+      qrcode.generate(JSON.stringify({ url: connectionUrl, token }), { small: true });
+    }
+  
+    console.log(chalk.gray('\nPress Ctrl+C to stop the server'));
   });
 }
 
