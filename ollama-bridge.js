@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Made by Ali Abdurraheem <work.ali@abdurraheem.com> AKA Kataki Takanashi //
+
 const express = require('express');
 const cors = require('cors');
 const { createProxyMiddleware } = require('http-proxy-middleware');
@@ -77,7 +79,6 @@ async function findAvailablePort(startPort = argv.port || 3535) {
 }
 
 // Generate secure connection details
-// In the generateConnectionDetails function, update the ngrok connection:
 async function generateConnectionDetails(port) {
   const token = crypto.randomBytes(32).toString('hex');
   let storedNgrokToken = config.get('ngrokToken');
