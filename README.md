@@ -2,6 +2,23 @@
 
 A secure bridge server that enables remote access to your local Ollama instance through ngrok tunneling.
 
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Download](#pre-built-binaries)
+  - [Running Ollama Bridge](#running-ollama-bridge)
+  - [First Time Setup](#first-time-setup)
+- [Usage Options](#usage-options)
+- [Building from Source](#building-from-source)
+  - [Prerequisites](#prerequisites)
+  - [Build Steps](#build-steps)
+- [Security](#security)
+- [API Usage](#api-usage)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - 🔒 Secure remote access to your local Ollama instance
@@ -14,7 +31,9 @@ A secure bridge server that enables remote access to your local Ollama instance 
 ## Quick Start
 
 Step 1: Download the binary for your operating system.
+
 Step 2: Run Ollama.
+
 Step 3: Run Ollama Bridge.
 
 ### Pre-built Binaries
