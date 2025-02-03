@@ -100,7 +100,16 @@ To make requests to your Ollama instance through the bridge:
 1. Use the provided URL and token from the connection details
 2. Add the token to your requests:
 ```bash
-curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/tags
+# Example: Getting available models
+curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/tags
+```
+
+```bash
+# Example: Creating a chat completion
+curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
+  "model": "llama2",
+  "messages": [{"role": "user", "content": "Hello!"}]
+}'
 ```
 
 ## Troubleshooting
