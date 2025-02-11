@@ -23,7 +23,7 @@ const config = new Conf({
 // Check if token exists
 const hasStoredToken = !!config.get('ngrokToken');
 
-// Update command line arguments
+// command line arguments
 const argv = yargs(hideBin(process.argv))
   .option('ollama-url', {
     description: 'Ollama server URL',
@@ -101,13 +101,11 @@ async function generateConnectionDetails(port) {
   }
 
   try {
-
-    
-    // Initialize ngrok with token 
+    // ngrok configuration
     const listener = await ngrok.forward({
       addr: port,
       authtoken: storedNgrokToken,
-      domain_preference: undefined // This will use the free domain
+      scheme: 'https'
     });
 
     return { token, connectionUrl: listener.url() };
@@ -149,16 +147,38 @@ async function startServer() {
 
   const app = express();
 
-  // Security middleware
+  // Enhanced CORS configuration
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token'],
+    exposedHeaders: ['Content-Type', 'Accept', 'x-auth-token'],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+    maxAge: 86400 // Cache preflight for 24 hours
+  }));
+
+  // CORS headers middleware
   app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token');
+    next();
+  });
+
+  // Security middleware after CORS
+  app.use((req, res, next) => {
+    // Allow OPTIONS requests to pass through
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
     const authToken = req.headers['x-auth-token'];
     if (!authToken || authToken !== token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
   });
-
-  app.use(cors());
 
   // Health check endpoint
   app.get('/health', (req, res) => {
@@ -173,10 +193,13 @@ async function startServer() {
     onError: (err, req, res) => {
       console.error(chalk.red('Proxy Error:'), err);
       res.status(502).json({ error: 'Proxy Error', message: err.message });
+    },
+    headers: {
+      'Bypass-Tunnel-Reminder': 'true',
+      'Content-Type': 'application/json'
     }
   }));
 
-  // Also update the server listen
   app.listen(port, '127.0.0.1', () => {
     console.log(chalk.green('\n🚀 Ollama Bridge Server is running!\n'));
     console.log(chalk.yellow('Connection Details:'));
