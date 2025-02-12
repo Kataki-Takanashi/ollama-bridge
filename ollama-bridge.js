@@ -105,7 +105,20 @@ async function generateConnectionDetails(port) {
     const listener = await ngrok.forward({
       addr: port,
       authtoken: storedNgrokToken,
-      scheme: 'https'
+      scheme: 'https',
+      allow_h2: 'true',
+      inspect: 'false',
+      allow_user_agent: 'true',
+      domain_allowlist: ['*.abdurraheem.com'], // TODO: Make this a cli argument
+      request_header_remove: ['ngrok-skip-browser-warning'],
+      metadata: JSON.stringify({
+        'cors-origins': ['*'],
+        'cors-allow-headers': ['*'],
+        'cors-allow-methods': ['GET', 'POST', 'OPTIONS'],
+        'cors-allow-credentials': 'true'
+      }),
+      oauth: null,
+      basic_auth: null
     });
 
     return { token, connectionUrl: listener.url() };
@@ -151,8 +164,8 @@ async function startServer() {
   app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token'],
-    exposedHeaders: ['Content-Type', 'Accept', 'x-auth-token'],
+    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning', 'User-Agent'],
+    exposedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning'],
     credentials: true,
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -162,15 +175,18 @@ async function startServer() {
   // CORS headers middleware
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning, User-Agent');
+    res.header('Access-Control-Expose-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning');
     next();
   });
 
   // Security middleware after CORS
   app.use((req, res, next) => {
-    // Allow OPTIONS requests to pass through
+    //  OPTIONS requests with CORS headers
     if (req.method === 'OPTIONS') {
-      return next();
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning, User-Agent');
+      return res.status(204).end();
     }
 
     const authToken = req.headers['x-auth-token'];
@@ -190,13 +206,19 @@ async function startServer() {
     target: argv.ollamaUrl.replace('localhost', '127.0.0.1'),
     changeOrigin: true,
     pathRewrite: {'^/api': ''},
-    onError: (err, req, res) => {
-      console.error(chalk.red('Proxy Error:'), err);
-      res.status(502).json({ error: 'Proxy Error', message: err.message });
+    ws: true,
+    secure: false,
+    onProxyReq: (proxyReq, req, res) => {
+      if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+      }
+      proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
+      proxyReq.setHeader('User-Agent', req.headers['user-agent'] || 'ollama-bridge');
     },
-    headers: {
-      'Bypass-Tunnel-Reminder': 'true',
-      'Content-Type': 'application/json'
+    onError: (err, req, res) => {
+      console.error(chalk.red('Proxy Error:'), err.message);
+      res.status(502).json({ error: 'Proxy Error', message: err.message });
     }
   }));
 
