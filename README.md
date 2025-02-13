@@ -111,7 +111,6 @@ The compiled binaries will be available in the `dist` directory.
 - All connections are secured via HTTPS (provided by ngrok)
 - Authentication is required for all API requests
 - Each session generates a unique access token
-- Local-only server binding
 
 ## API Usage
 To make requests to your Ollama instance through the bridge:
@@ -145,6 +144,9 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
    
    - The server will automatically find an available port
    - Optionally specify a port with --port option
+
+4. "403"
+  - Make sure to pass ngrok-skip-browser-warning in the headers.
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
