@@ -160,7 +160,7 @@ async function startServer() {
 
   const app = express();
 
-  // Enhanced CORS configuration
+  // CORS configuration
   app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -169,24 +169,13 @@ async function startServer() {
     credentials: true,
     preflightContinue: false,
     optionsSuccessStatus: 204,
-    maxAge: 86400 // Cache preflight for 24 hours
+    maxAge: 86400
   }));
 
-  // CORS headers middleware
+  // Security middleware
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning, User-Agent');
-    res.header('Access-Control-Expose-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning');
-    next();
-  });
-
-  // Security middleware after CORS
-  app.use((req, res, next) => {
-    //  OPTIONS requests with CORS headers
     if (req.method === 'OPTIONS') {
-      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, x-auth-token, ngrok-skip-browser-warning, User-Agent');
-      return res.status(204).end();
+      return next();
     }
 
     const authToken = req.headers['x-auth-token'];
@@ -209,10 +198,6 @@ async function startServer() {
     ws: true,
     secure: false,
     onProxyReq: (proxyReq, req, res) => {
-      if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-      }
       proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
       proxyReq.setHeader('User-Agent', req.headers['user-agent'] || 'ollama-bridge');
     },
