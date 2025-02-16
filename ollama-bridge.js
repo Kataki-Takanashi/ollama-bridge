@@ -109,13 +109,6 @@ async function generateConnectionDetails(port) {
       allow_h2: 'true',
       inspect: 'false',
       allow_user_agent: 'true',
-      domain_allowlist: ['wooledit.abdurraheem.com'], // TODO: Make this a cli argument
-      metadata: JSON.stringify({
-        'cors-origins': ['*'],
-        'cors-allow-headers': ['*'],
-        'cors-allow-methods': ['GET', 'POST', 'OPTIONS'],
-        'cors-allow-credentials': 'true'
-      }),
       oauth: null,
       basic_auth: null
     });
@@ -160,16 +153,17 @@ async function startServer() {
   const app = express();
 
   // CORS configuration
-  app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning'],
-    exposedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning'],
-    credentials: true,
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-    maxAge: 86400
-  }));
+  app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') return next();
+    
+    const authToken = req.headers['x-auth-token'];
+  
+    if (!authToken || authToken !== token) {
+      console.error('TOKEN MISMATCH!');
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  });
 
   // Security middleware
   app.use((req, res, next) => {
@@ -199,6 +193,7 @@ async function startServer() {
     onProxyReq: (proxyReq, req, res) => {
       proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
       proxyReq.setHeader('User-Agent', req.headers['user-agent'] || 'ollama-bridge');
+      proxyReq.setHeader('x-auth-token', req.headers['x-auth-token']); // Note: Possibly not needed
     },
     onError: (err, req, res) => {
       console.error(chalk.red('Proxy Error:'), err.message);
