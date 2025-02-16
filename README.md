@@ -146,7 +146,7 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
    - Optionally specify a port with --port option
 
 4. "403"
-  - Make sure to pass ngrok-skip-browser-warning in the headers.
+  - Likely a server side error, plz make an issue.
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
