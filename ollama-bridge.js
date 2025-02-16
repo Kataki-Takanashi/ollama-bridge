@@ -109,8 +109,7 @@ async function generateConnectionDetails(port) {
       allow_h2: 'true',
       inspect: 'false',
       allow_user_agent: 'true',
-      domain_allowlist: ['*.abdurraheem.com'], // TODO: Make this a cli argument
-      request_header_remove: ['ngrok-skip-browser-warning'],
+      domain_allowlist: ['wooledit.abdurraheem.com'], // TODO: Make this a cli argument
       metadata: JSON.stringify({
         'cors-origins': ['*'],
         'cors-allow-headers': ['*'],
@@ -164,7 +163,7 @@ async function startServer() {
   app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning', 'User-Agent'],
+    allowedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning'],
     exposedHeaders: ['Content-Type', 'Accept', 'x-auth-token', 'ngrok-skip-browser-warning'],
     credentials: true,
     preflightContinue: false,
