@@ -148,6 +148,9 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
 4. "403"
   - Likely a server side error, plz make an issue.
 
+5. You get an html page back
+  - Include "ngrok-skip-browser-warning: true" in your headers
+
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
