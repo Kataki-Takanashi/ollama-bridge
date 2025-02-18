@@ -151,6 +151,11 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
 5. You get an html page back
   - Include "ngrok-skip-browser-warning: true" in your headers
 
+6. "Connection timeout"
+  - Check your internet connection
+  - Ensure your ngrok session is active
+  - Try restarting the bridge server
+
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
