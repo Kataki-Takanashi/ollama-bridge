@@ -156,6 +156,11 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
   - Ensure your ngrok session is active
   - Try restarting the bridge server
 
+7. "Slow model responses"
+  - Check your GPU/CPU usage and free up RAM on the host machine
+  - Consider using a lighter model variant the reccomended model is "ifioravanti/mistral-grammar-checker:latest"
+  - Use a better host machine with more RAM and / or a better GPU
+
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
