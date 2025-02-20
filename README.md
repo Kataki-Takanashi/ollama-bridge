@@ -117,6 +117,7 @@ To make requests to your Ollama instance through the bridge:
 
 1. Use the provided URL and token from the connection details
 2. Add the token to your requests:
+3. If using a browser, make sure to respect CORS
 ```bash
 # Example: Getting available models
 curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/tags
