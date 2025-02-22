@@ -11,17 +11,12 @@ const { hideBin } = require('yargs/helpers');
 const qrcode = require('qrcode-terminal');
 const chalk = require('chalk');
 const fetch = require('node-fetch');
+const localtunnel = require('localtunnel');
+
+// suppress the deprecation warning
+process.removeAllListeners('warning');
+
 if (chalk && chalk.Level) chalk.level = 3;
-const ngrok = require('@ngrok/ngrok');
-const Conf = require('conf').default;
-
-// Add config store
-const config = new Conf({
-  projectName: 'ollama-bridge'
-});
-
-// Check if token exists
-const hasStoredToken = !!config.get('ngrokToken');
 
 // command line arguments
 const argv = yargs(hideBin(process.argv))
@@ -33,8 +28,8 @@ const argv = yargs(hideBin(process.argv))
     description: 'Specific port to use (will find available port if occupied)',
     type: 'number'
   })
-  .option('ngrok-token', {
-    description: 'Set Ngrok authtoken (only needed for first run)',
+  .option('subdomain', {
+    description: 'Custom subdomain for localtunnel (optional)',
     type: 'string'
   })
   .option('qr', {
@@ -42,11 +37,11 @@ const argv = yargs(hideBin(process.argv))
     type: 'boolean',
     default: false
   })
-  .epilogue(hasStoredToken ? '' : `
-${chalk.yellow('\nFirst Time Setup:')}
-${chalk.cyan('1. Sign up for a free ngrok account at https://ngrok.com')}
-${chalk.cyan('2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken')}
-${chalk.cyan('3. Run with your token: --ngrok-token="your_token_here"')}`)
+  .option('force-max-listeners', {
+    description: 'Force set maximum number of event listeners (default: 25)',
+    type: 'number',
+    default: null
+  })
   .strict()
   .fail((msg, err, yargs) => {
     if (err) throw err;
@@ -81,47 +76,56 @@ async function findAvailablePort(startPort = argv.port || 3535) {
 // Generate secure connection details
 async function generateConnectionDetails(port) {
   const token = crypto.randomBytes(32).toString('hex');
-  let storedNgrokToken = config.get('ngrokToken');
-  
-  if (argv.ngrokToken) {
-    storedNgrokToken = argv.ngrokToken;
-    config.set('ngrokToken', argv.ngrokToken);
-  }
-  
-  if (!storedNgrokToken) {
-    console.error(chalk.red('Ngrok token not found. Please provide it using --ngrok-token'));
-    console.log(chalk.yellow('\nTo get started:'));
-    console.log(chalk.cyan('1. Sign up for a free ngrok account at https://ngrok.com'));
-    console.log(chalk.cyan('2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken'));
-    console.log(chalk.cyan('3. Run the script with your token:'));
-    console.log(chalk.gray('   ./ollama-bridge --ngrok-token="your_token_here"'));
-    console.log(chalk.yellow('\nFor all available options, run:'));
-    console.log(chalk.gray('   ./ollama-bridge --help\n'));
-    process.exit(1);
-  }
 
   try {
-    // ngrok configuration
-    const listener = await ngrok.forward({
-      addr: port,
-      authtoken: storedNgrokToken,
-      scheme: 'https',
-      allow_h2: 'true',
-      inspect: 'false',
-      allow_user_agent: 'true',
-      oauth: null,
-      basic_auth: null
+    const bridge = await localtunnel({ 
+      port,
+      subdomain: argv.subdomain
     });
 
-    return { token, connectionUrl: listener.url() };
+    // Set max listeners if forced
+    if (argv.forceMaxListeners !== null) {
+      bridge.setMaxListeners(argv.forceMaxListeners);
+    } 
+    else {
+    // Set max listeners for this instance
+    bridge.setMaxListeners(25);
+    }
+
+    
+    // Log connection details
+    console.log(chalk.gray('Bridge details:'));
+    console.log(chalk.gray('- Local:', `http://127.0.0.1:${port}`));
+    console.log(chalk.gray('- Public:', bridge.url));
+
+    // Handle bridge errors
+    bridge.on('error', (err) => {
+      console.error(chalk.red('Bridge Error:'), err.message);
+      bridge.removeAllListeners();  // Cleanup listeners
+      process.exit(1);
+    });
+
+    bridge.on('close', () => {
+      console.log(chalk.yellow('\nBridge raised'));
+      bridge.removeAllListeners();  // Cleanup listeners
+      process.exit(0);
+    });
+
+    // Handle process termination
+    process.on('beforeExit', () => {
+      bridge.removeAllListeners();
+      bridge.close();
+    });
+
+    return { token, connectionUrl: bridge.url };
   } catch (error) {
-    console.error(chalk.red('Failed to start ngrok:'), error.message);
+    console.error(chalk.red('Failed to lower bridge:'), error.message);
     process.exit(1);
   }
 }
 
 process.on('SIGINT', async () => {
-  console.log(chalk.yellow('\nShutting down server...'));
+  console.log(chalk.yellow('\nRaising bridge...'));
   process.exit(0);
 });
 
@@ -152,18 +156,17 @@ async function startServer() {
 
   const app = express();
 
-  // CORS configuration
-  app.use((req, res, next) => {
-    if (req.method === 'OPTIONS') return next();
-    
-    const authToken = req.headers['x-auth-token'];
-  
-    if (!authToken || authToken !== token) {
-      console.error('TOKEN MISMATCH!');
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    next();
-  });
+  // Add body parsing middleware
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // CORS middleware
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: ['*'],
+    credentials: true
+  }));
 
   // Security middleware
   app.use((req, res, next) => {
@@ -173,7 +176,11 @@ async function startServer() {
 
     const authToken = req.headers['x-auth-token'];
     if (!authToken || authToken !== token) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        receivedToken: authToken ? 'present' : 'missing',
+        tokenMatch: authToken === token
+      });
     }
     next();
   });
@@ -191,9 +198,34 @@ async function startServer() {
     ws: true,
     secure: false,
     onProxyReq: (proxyReq, req, res) => {
-      proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
-      proxyReq.setHeader('User-Agent', req.headers['user-agent'] || 'ollama-bridge');
-      proxyReq.setHeader('x-auth-token', req.headers['x-auth-token']); // Note: Possibly not needed
+      // Clear existing headers to prevent conflicts
+      proxyReq.removeHeader('x-auth-token');
+      proxyReq.removeHeader('origin');
+      proxyReq.removeHeader('host');
+      
+      // Set essential headers
+      proxyReq.setHeader('User-Agent', 'ollama-bridge');
+      proxyReq.setHeader('Host', '127.0.0.1:11434');
+      proxyReq.setHeader('Origin', 'http://127.0.0.1:11434');
+      
+      // Handle POST request body
+      if (req.method === 'POST' && req.body) {
+        const bodyData = JSON.stringify(req.body);
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+        proxyReq.write(bodyData);
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      // Force status code to match the actual response
+      proxyRes.statusCode = proxyRes.statusCode;
+      
+      // Ensure CORS headers
+      proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+      proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS';
+      proxyRes.headers['Access-Control-Allow-Headers'] = '*';
+      
+      // Set proper content type for JSON responses
+      proxyRes.headers['content-type'] = 'application/json';
     },
     onError: (err, req, res) => {
       console.error(chalk.red('Proxy Error:'), err.message);

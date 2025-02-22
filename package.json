@@ -20,12 +20,12 @@
     ]
   },
   "dependencies": {
-    "@ngrok/ngrok": "^0.9.0",
     "chalk": "^4.1.2",
     "conf": "^10.2.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "http-proxy-middleware": "^2.0.6",
+    "localtunnel": "^2.0.2",
     "node-fetch": "^2.6.9",
     "qrcode-terminal": "^0.12.0",
     "yargs": "^17.7.2"
