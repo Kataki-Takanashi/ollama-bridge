@@ -7,7 +7,6 @@ A secure bridge server that enables remote access to your local Ollama instance 
 - [Quick Start](#quick-start)
   - [Download](#pre-built-binaries)
   - [Running Ollama Bridge](#running-ollama-bridge)
-  - [First Time Setup](#first-time-setup)
 - [Usage Options](#usage-options)
 - [Building from Source](#building-from-source)
   - [Prerequisites](#prerequisites)
@@ -46,6 +45,8 @@ Download the appropriate binary for your operating system from [the releases sec
 ```bash
 ollama-bridge-win.exe
 ```
+
+For **MacOS** users, please note that it will likely throw an error, to solve please see #7 in [Common Issues](#common-issues)!
 #### macOS (Intel)
 ```bash
 chmod +x ollama-bridge-macos
@@ -138,17 +139,26 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
 3. "403"
   - Likely a server side error, plz make an issue.
 
-4. You get an html page back
+4. You get an html page back with the API
   - Include "bypass-tunnel-reminder: true" in your headers
 
-5. "Connection timeout"
+5. Connection timeout
   - Check your internet connection
   - Try restarting the bridge server
 
-6. "Slow model responses"
+6. Slow model responses
   - Check your GPU/CPU usage and free up RAM on the host machine
-  - Consider using a lighter model variant the reccomended model is "ifioravanti/mistral-grammar-checker:latest"
+  - Consider using a lighter model variant, the reccomended model is "[ifioravanti/mistral-grammar-checker:latest](https://ollama.com/ifioravanti/mistral-grammar-checker)"
   - Use a better host machine with more RAM and / or a better GPU
+
+7. "macOS cannot verify that this app is free from malware"
+   - This is due to macOS Gatekeeper security feature
+   - Solution 1: Right-click (or Control-click) the app and select "Open" from the context menu
+   - Solution 2: In System Settings > Privacy & Security, scroll down and click "Open Anyway"
+   - Solution 3: Run this command in terminal (replace with your binary name):
+     ```bash
+     xattr -d com.apple.quarantine ./ollama-bridge-macos-arm64
+     ```
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
