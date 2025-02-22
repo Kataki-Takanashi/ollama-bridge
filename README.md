@@ -22,7 +22,7 @@ A secure bridge server that enables remote access to your local Ollama instance 
 ## Features
 
 - 🔒 Secure remote access to your local Ollama instance
-- 🌐 Automatic HTTPS tunneling via ngrok
+- 🌐 Automatic HTTPS tunneling via localtunnel
 - 🔑 Token-based authentication
 - 📱 QR code support for easy mobile connection
 - 🔄 Automatic port selection
@@ -44,32 +44,23 @@ Download the appropriate binary for your operating system from [the releases sec
 
 #### Windows
 ```bash
-ollama-bridge-win.exe --ngrok-token="your_token_here"
+ollama-bridge-win.exe
 ```
 #### macOS (Intel)
 ```bash
 chmod +x ollama-bridge-macos
-./ollama-bridge-macos --ngrok-token="your_token_here"
+./ollama-bridge-macos
 ```
 #### macOS (Apple Silicon)
 ```bash
 chmod +x ollama-bridge-macos-arm64
-./ollama-bridge-macos-arm64 --ngrok-token="your_token_here"
+./ollama-bridge-macos-arm64
 ```
 #### Linux
 ```bash
 chmod +x ollama-bridge-linux
-./ollama-bridge-linux --ngrok-token="your_token_here"
+./ollama-bridge-linux
 ```
-
--
-
-### First Time Setup
-
-1. Sign up for a free ngrok account at https://ngrok.com
-2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
-3. Run the binary with your token (see examples above)
-
 
 ## Usage Options
 | Option | Description | Type | Default |
@@ -77,7 +68,8 @@ chmod +x ollama-bridge-linux
 | `--version` | Show version number | boolean | `false` |
 | `--ollama-url` | Ollama server URL | string | `http://localhost:11434` |
 | `--port` | Specific port to use (will find available port if occupied) | number | - |
-| `--ngrok-token` | Set Ngrok authtoken (only needed for first run) | string | - |
+| `--subdomain` | Custom subdomain for localtunnel (optional) | string | - |
+| `--force-max-listeners` | Force set maximum number of event listeners | number | 25 |
 | `--qr` | Show QR code for connection details | boolean | `false` |
 | `--help` | Show help | boolean | `false` |
 
@@ -108,7 +100,7 @@ npm run build
 The compiled binaries will be available in the `dist` directory.
 
 ## Security
-- All connections are secured via HTTPS (provided by ngrok)
+- All connections are secured via HTTPS (provided by localtunnel)
 - Authentication is required for all API requests
 - Each session generates a unique access token
 
@@ -118,9 +110,10 @@ To make requests to your Ollama instance through the bridge:
 1. Use the provided URL and token from the connection details
 2. Add the token to your requests:
 3. If using a browser, make sure to respect CORS
+
 ```bash
 # Example: Getting available models
-curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/tags
+curl -H "x-auth-token: YOUR_TOKEN" -H "bypass-tunnel-reminder: true" https://your-tunnel-url/api/api/tags
 ```
 
 ```bash
@@ -137,27 +130,22 @@ curl -H "x-auth-token: YOUR_TOKEN" https://your-tunnel-url/api/api/chat -d '{
    
    - Ensure Ollama is running locally
    - Check if Ollama is accessible at http://localhost:11434
-2. "Ngrok token not found"
-   
-   - Provide your ngrok token using the --ngrok-token option
-   - Token only needs to be set once
-3. "Port already in use"
+2. "Port already in use"
    
    - The server will automatically find an available port
    - Optionally specify a port with --port option
 
-4. "403"
+3. "403"
   - Likely a server side error, plz make an issue.
 
-5. You get an html page back
-  - Include "ngrok-skip-browser-warning: true" in your headers
+4. You get an html page back
+  - Include "bypass-tunnel-reminder: true" in your headers
 
-6. "Connection timeout"
+5. "Connection timeout"
   - Check your internet connection
-  - Ensure your ngrok session is active
   - Try restarting the bridge server
 
-7. "Slow model responses"
+6. "Slow model responses"
   - Check your GPU/CPU usage and free up RAM on the host machine
   - Consider using a lighter model variant the reccomended model is "ifioravanti/mistral-grammar-checker:latest"
   - Use a better host machine with more RAM and / or a better GPU
