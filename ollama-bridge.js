@@ -76,9 +76,10 @@ async function findAvailablePort(startPort = argv.port || 3535) {
 // Generate secure connection details
 async function generateConnectionDetails(port) {
   const token = crypto.randomBytes(32).toString('hex');
+  let bridge;
 
   try {
-    const bridge = await localtunnel({ 
+    bridge = await localtunnel({ 
       port,
       subdomain: argv.subdomain
     });
@@ -86,13 +87,10 @@ async function generateConnectionDetails(port) {
     // Set max listeners if forced
     if (argv.forceMaxListeners !== null) {
       bridge.setMaxListeners(argv.forceMaxListeners);
-    } 
-    else {
-    // Set max listeners for this instance
-    bridge.setMaxListeners(25);
+    } else {
+      bridge.setMaxListeners(25);
     }
 
-    
     // Log connection details
     console.log(chalk.gray('Bridge details:'));
     console.log(chalk.gray('- Local:', `http://127.0.0.1:${port}`));
@@ -101,33 +99,48 @@ async function generateConnectionDetails(port) {
     // Handle bridge errors
     bridge.on('error', (err) => {
       console.error(chalk.red('Bridge Error:'), err.message);
-      bridge.removeAllListeners();  // Cleanup listeners
+      cleanup(bridge);
       process.exit(1);
     });
 
     bridge.on('close', () => {
       console.log(chalk.yellow('\nBridge raised'));
-      bridge.removeAllListeners();  // Cleanup listeners
+      cleanup(bridge);
       process.exit(0);
     });
 
     // Handle process termination
+    const cleanup = (bridge) => {
+      if (bridge) {
+        bridge.removeAllListeners();
+        bridge.close();
+      }
+    };
+
+    process.on('SIGINT', () => {
+      console.log(chalk.yellow('\nRaising bridge...'));
+      cleanup(bridge);
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      console.log(chalk.yellow('\nRaising bridge...'));
+      cleanup(bridge);
+      process.exit(0);
+    });
+
     process.on('beforeExit', () => {
-      bridge.removeAllListeners();
-      bridge.close();
+      cleanup(bridge);
     });
 
     return { token, connectionUrl: bridge.url };
   } catch (error) {
+    if (bridge) cleanup(bridge);
     console.error(chalk.red('Failed to lower bridge:'), error.message);
     process.exit(1);
   }
 }
 
-process.on('SIGINT', async () => {
-  console.log(chalk.yellow('\nRaising bridge...'));
-  process.exit(0);
-});
 
 // Test Ollama connection
 async function testOllamaConnection(url) {
